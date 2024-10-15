@@ -29,7 +29,10 @@ class RegisterController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        return response()->json(['message' => 'Account created successfully', 'account' => $account], 201);
+        // Create a new token
+        $token = $account->createToken('Bearer Token')->plainTextToken;
+
+        return response()->json(['message' => 'Account created successfully', 'account' => $account, 'token' => $token], 201);
     }
 
 

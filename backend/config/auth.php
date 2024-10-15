@@ -41,6 +41,8 @@ return [
             'provider' => 'users',
         ],
 
+        
+
         // changes
         'account' => [
             'driver' => 'session',

@@ -16,10 +16,7 @@ const handleSubmit = async () => {
     // Store the Bearer token in local storage
     localStorage.setItem("token", response.data.token);
 
-    // // Set the Authorization header for future requests
-    // axios.defaults.headers.common[
-    //   "Authorization"
-    // ] = `Bearer ${response.data.token}`;
+    
 
     // Redirect to Dashboard after successful login
     router.push("/dashboard");

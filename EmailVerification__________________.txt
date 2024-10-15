@@ -1,0 +1,267 @@
+EmailVerification_________________________________________________
+
+1.Enable Email Verification: Make sure your User model implements the MustVerifyEmail interface.
+
+
+use Illuminate\Contracts\Auth\MustVerifyEmail;
+
+class User extends Authenticatable implements MustVerifyEmail
+{
+    // ...
+}
+
+
+2. Update Auth Configuration: In config/auth.php, ensure your providers array is correctly set up for users.
+
+3. Set Up Routes: Add routes for email verification in routes/api.php:
+
+Route::post('/email/send-verification', [VerificationController::class, 'send'])->middleware('auth:api');
+Route::post('/email/resend-verification', [VerificationController::class, 'resend']);
+
+
+4. Create Verification Controller: Generate a controller to handle email verification logic:
+
+php artisan make:controller VerificationController
+
+In VerificationController.php:
+
+use App\Models\Account;
+
+use Illuminate\Http\Request;
+
+class VerificationController extends Controller
+{
+
+
+public function send(Request $request)
+{
+    $user = Auth::user(); // Get the currently authenticated user
+
+    if ($user->hasVerifiedEmail()) {
+        return response()->json(['message' => 'Email already verified.'], 400);
+    }
+
+    $user->sendEmailVerificationNotification(); // Send the verification email
+
+    return response()->json(['message' => 'Verification email sent.'], 200);
+}
+
+    public function resend(Request $request)
+    {
+        $user = Account::where('email', $request->email)->first();
+        if (!$user) {
+            return response()->json(['message' => 'Account not found.'], 404);
+        }
+        if ($user->hasVerifiedEmail()) {
+            return response()->json(['message' => 'Email already verified.'], 400);
+        }
+        $user->sendEmailVerificationNotification();
+        return response()->json(['message' => 'Verification email resent.']);
+    }
+}
+
+
+
+Step 2: Customize Middleware for Email Verification-------------------------------
+
+1. Create Middleware: Create a custom middleware to check if the email is verified:
+
+php artisan make:middleware EnsureEmailIsVerifiedOverride
+
+
+In EnsureEmailIsVerifiedOverride.php:
+
+
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Support\Facades\Auth;
+
+class EnsureEmailIsVerifiedOverride
+{
+    public function handle($request, Closure $next)
+    {
+        if (!Auth::user() || !Auth::user()->hasVerifiedEmail()) {
+            return response()->json(['message' => 'Your email address is not verified.'], 403);
+        }
+        return $next($request);
+    }
+}
+
+
+2. Register Middleware: Register your middleware in app/Http/Kernel.php under the $routeMiddleware array: -----
+
+protected $routeMiddleware = [
+    // ...
+    'verified.override' => \App\Http\Middleware\EnsureEmailIsVerifiedOverride::class,
+];
+
+
+Step 3: Implement Frontend Logic in Vue.js
+Setup Axios for API Calls: Ensure you have Axios installed and configured in your Vue.js project.
+
+Create Method for Email Verification: In your Vue component, create a method to send the verification email:
+
+<script setup>
+import { ref } from "vue";
+import axios from "axios";
+import router from "@/router";
+
+const name = ref("");
+const email = ref("");
+const password = ref("");
+const errorMessage = ref("");
+const successMessage = ref("");
+
+const handleSubmit = async () => {
+  try {
+    const response = await axios.post("http://localhost:8000/api/register", {
+      name: name.value,
+      email: email.value,
+      password: password.value,
+    });
+
+    if (response.status === 201) {
+      // // Store the Bearer token in local storage
+      localStorage.setItem("token", response.data.token);
+
+      // console.log(localStorage.getItem("token"));
+
+      // Send the verification email after successful registration
+      await sendVerificationEmail();
+
+      successMessage.value =
+        "Signed up successfully! Please check your email to verify.";
+      name.value = "";
+      email.value = "";
+      password.value = "";
+      router.push("/signin");
+    }
+  } catch (error) {
+    if (error.response) {
+      errorMessage.value = error.response.data.message || "Sign up failed.";
+    } else {
+      errorMessage.value = "Server error. Please try again later.";
+    }
+  }
+};
+
+const sendVerificationEmail = async () => {
+  console.log(localStorage.getItem("token"));
+  try {
+    const response = await axios.post(
+      "http://localhost:8000/api/email/send-verification",
+      {},
+      {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+      }
+    );
+    console.log(response.status);
+    if (response.status === 200) {
+      alert("Verification email sent. Please check your inbox.");
+    }
+  } catch (error) {
+    if (error.response && error.response.status === 403) {
+      alert("Your email is not verified. Please check your inbox.");
+    } else {
+      alert("Failed to send verification email. Please try again later.");
+    }
+  }
+};
+</script>
+
+<template>
+  <div class="flex items-center justify-center min-h-screen bg-gray-100">
+    <div class="w-full max-w-md p-8 bg-white rounded-lg shadow-lg">
+      <h2 class="text-2xl font-bold text-center text-gray-700">Sign Up</h2>
+      <form @submit.prevent="handleSubmit">
+        <div class="mt-6">
+          <label for="name" class="block mb-2 text-sm font-medium text-gray-600"
+            >Name:</label
+          >
+          <input
+            type="text"
+            id="name"
+            v-model="name"
+            required
+            placeholder="Enter your name"
+            class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-green-200"
+          />
+        </div>
+
+        <div class="mt-4">
+          <label
+            for="email"
+            class="block mb-2 text-sm font-medium text-gray-600"
+            >Email:</label
+          >
+          <input
+            type="email"
+            id="email"
+            v-model="email"
+            required
+            placeholder="Enter your email"
+            class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-green-200"
+          />
+        </div>
+
+        <div class="mt-4">
+          <label
+            for="password"
+            class="block mb-2 text-sm font-medium text-gray-600"
+            >Password:</label
+          >
+          <input
+            type="password"
+            id="password"
+            v-model="password"
+            required
+            placeholder="Enter your password"
+            class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-green-200"
+          />
+        </div>
+
+        <button
+          type="submit"
+          class="w-full mt-6 p-2 text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring focus:ring-green-200"
+        >
+          Sign Up
+        </button>
+      </form>
+
+      <p v-if="errorMessage" class="mt-4 text-red-600 text-sm text-center">
+        {{ errorMessage }}
+      </p>
+      <p v-if="successMessage" class="mt-4 text-green-600 text-sm text-center">
+        {{ successMessage }}
+      </p>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+</style>
+
+
+
+Step-4-----.env--------------------
+
+Password: Make sure the MAIL_PASSWORD in your .env file is correct. If you're using your regular Gmail password, this won't work due to Google's security policies.
+App Password: Instead of your regular Gmail password, you need to use an "App Password". Here's how to set it up:
+a. Go to your Google Account settings.
+b. Navigate to the "Security" section.
+c. Enable 2-Step Verification if it's not already on.
+d. After enabling 2-Step Verification, a new option "App passwords" will appear.
+e. Generate a new App password for your application.
+f. Use this generated password in your MAIL_PASSWORD field in the .env file.
+Less secure app access: If you're using a regular Gmail account (not G Suite), make sure you've allowed "Less secure app access" in your Google Account settings. However, note that Google is phasing this out, so using an App Password is the recommended approach.
+Double-check other settings:
+
+Ensure MAIL_USERNAME is correct.
+Verify MAIL_HOST is set to smtp.gmail.com.
+Confirm MAIL_PORT is set to 587.
+Make sure MAIL_ENCRYPTION is set to tls.
+
+Clear config cache: After making changes to your .env file, clear your Laravel configuration cache:
+
+php artisan config:clear
